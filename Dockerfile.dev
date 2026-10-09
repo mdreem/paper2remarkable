@@ -1,0 +1,62 @@
+# Development image: builds paper2remarkable from the local working tree
+# instead of installing the released version from PyPI (see Dockerfile).
+# Use this to test local changes with all system dependencies available.
+#
+# Build (from the repository root):
+#
+#   docker build -f Dockerfile.dev -t p2r-dev .
+#
+# Run without uploading, writing the output to the current directory:
+#
+#   docker run --rm -v "$PWD":/home/user/out p2r-dev -n <url>
+#
+# Run with upload to the reMarkable cloud. The rmapi token is kept on the
+# host so it survives container restarts. On first use rmapi asks for a
+# one-time code from https://my.remarkable.com/device/desktop/connect:
+#
+#   mkdir -p ~/.rmapi
+#   docker run --rm -it -v ~/.rmapi:/home/user/.rmapi --entrypoint rmapi p2r-dev ls
+#   docker run --rm -v ~/.rmapi:/home/user/.rmapi p2r-dev <url>
+
+FROM golang:1.23-bookworm AS rmapi
+
+# rmapi has replace directives in its go.mod, so it can't be installed with
+# "go install <module>@latest" and has to be built from a checkout.
+RUN git clone --depth 1 https://github.com/ddvk/rmapi /rmapi \
+    && cd /rmapi && GOBIN=/out go install
+
+
+FROM python:3.11-slim-bookworm
+
+COPY --from=rmapi /out/rmapi /usr/bin/rmapi
+
+# needed to install openjdk-11-jre-headless (pdftk)
+RUN mkdir -p /usr/share/man/man1
+
+# imagemagick, pdftk, qpdf, ghostscript, pdftoppm, and the pango libraries
+# that weasyprint needs for HTML sources
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        libmagickwand-dev \
+        pdftk \
+        qpdf \
+        ghostscript \
+        poppler-utils \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz-subset0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /src
+RUN pip install --no-cache-dir /src
+
+RUN useradd -u 1000 -m -U user
+
+USER user
+
+ENV USER=user
+ENV RMAPI_CONFIG=/home/user/.rmapi/rmapi.conf
+
+WORKDIR /home/user/out
+
+ENTRYPOINT ["p2r"]

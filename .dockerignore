@@ -1,0 +1,7 @@
+.git
+.github
+*.egg-info
+__pycache__
+.tox
+build
+dist
