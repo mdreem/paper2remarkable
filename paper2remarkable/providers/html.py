@@ -21,6 +21,12 @@ import titlecase
 import unidecode
 import weasyprint
 
+try:
+    # WeasyPrint >= 70 replaced the plain-callable url fetcher with a class
+    from weasyprint.urls import URLFetcher
+except ImportError:  # pragma: no cover
+    URLFetcher = None
+
 from ..log import Logger
 from ..utils import clean_string
 from ..utils import get_content_type_with_retry
@@ -70,12 +76,29 @@ FONT_URLS = [
 ]
 
 
-def url_fetcher(url):
+def fix_url(url):
+    """Rewrite protocol-relative and mangled file urls to absolute https urls"""
     if url.startswith("//"):
-        url = "https:" + url
+        return "https:" + url
     elif url.startswith("file:///"):
-        url = "https:" + url[len("file:/") :]
-    return weasyprint.default_url_fetcher(url)
+        return "https:" + url[len("file:/") :]
+    return url
+
+
+if URLFetcher is None:
+    # WeasyPrint < 70 takes a plain callable that returns a dict
+    def url_fetcher(url):
+        return weasyprint.default_url_fetcher(fix_url(url))
+
+else:
+    # WeasyPrint >= 70 takes a URLFetcher instance instead. A plain function
+    # has no _fail_on_errors attribute and returns the wrong response type,
+    # which makes every HTML source fail (see issue with weasyprint 70).
+    class P2RURLFetcher(URLFetcher):
+        def fetch(self, url, headers=None):
+            return super().fetch(fix_url(url), headers)
+
+    url_fetcher = P2RURLFetcher()
 
 
 def make_readable(request_html):
