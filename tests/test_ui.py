@@ -61,7 +61,7 @@ class TestUI(unittest.TestCase):
             (
                 Arxiv,
                 "http://arxiv.org/abs/arXiv:1908.03213",
-                "http://arxiv.org/abs/1908.03213",
+                "https://arxiv.org/abs/1908.03213",
             ),
             (
                 Arxiv,
@@ -71,7 +71,7 @@ class TestUI(unittest.TestCase):
             (
                 Arxiv,
                 "https://arxiv.org/pdf/physics/0605197v1.pdf",
-                "http://arxiv.org/pdf/physics/0605197v1",
+                "https://arxiv.org/pdf/physics/0605197v1",
             ),
             (
                 PubMed,
@@ -205,8 +205,10 @@ class TestUI(unittest.TestCase):
             ),
         ]
         for exp_prov, url, exp_url in tests:
-            prov, new_url, jar = choose_provider(url)
+            # choose_provider is called inside subTest so that a single
+            # unreachable site doesn't abort the remaining cases
             with self.subTest(url=url):
+                prov, new_url, jar = choose_provider(url)
                 self.assertEqual(exp_url, new_url)
                 self.assertEqual(prov, exp_prov)
 

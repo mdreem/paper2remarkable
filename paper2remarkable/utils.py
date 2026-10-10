@@ -12,6 +12,7 @@ import os
 import string
 import subprocess
 import time
+import urllib.parse
 
 import requests
 import unidecode
@@ -135,6 +136,31 @@ def get_content_type_with_retry(url, tries=5, cookiejar=None):
     return None
 
 
+def strip_default_port(url):
+    """Remove the default port from a url, if it is given explicitly
+
+    Some sites (PMC, OpenReview) send a Location header that spells out the
+    default port. Keeping it gives urls like https://example.com:443/a, which
+    are valid but non-canonical and can stop provider regexes from matching.
+    """
+    parsed = urllib.parse.urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        # malformed port, leave the url alone
+        return url
+    defaults = {"http": 80, "https": 443}
+    if port is None or defaults.get(parsed.scheme) != port:
+        return url
+    netloc = parsed.hostname or ""
+    if parsed.username:
+        auth = parsed.username
+        if parsed.password:
+            auth += ":" + parsed.password
+        netloc = auth + "@" + netloc
+    return urllib.parse.urlunsplit(parsed._replace(netloc=netloc))
+
+
 def follow_redirects(url):
     """Follow redirects from the URL (at most 100)"""
     it = 0
@@ -154,7 +180,7 @@ def follow_redirects(url):
     if it == 100:
         logger.warning("Max redirects reached. There may be a problem.")
     jar = jar or req.cookies
-    return url, jar
+    return strip_default_port(url), jar
 
 
 def upload_to_remarkable_rmapi(

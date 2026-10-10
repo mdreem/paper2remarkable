@@ -33,22 +33,34 @@ class TestHTML(unittest.TestCase):
         self.assertIn(expected_image, html_article)
 
     def test_custom_css(self):
+        """Custom CSS should reach WeasyPrint, checked through the page size
+
+        This used to render a live hbr.org article and assert a page count,
+        but that url is paywalled now, so readability returns only the page
+        header and the count no longer means anything. The article is fed in
+        through the informer cache instead, which keeps the test offline and
+        makes it assert the thing it is named after.
+        """
         test_css = """
         @page { size: 702px 936px; margin: 1in; }
         img { display: block; margin: 0 auto; text-align: center; max-width: 70%; max-height: 300px; }
-        h1,h2,h3 { font-family: 'Montserrat'; }
-        p, li { font-size: 12pt; line-height: 2; font-family: 'Montserrat'; text-align: left; }
+        h1,h2,h3 { font-family: sans-serif; }
+        p, li { font-size: 12pt; line-height: 2; text-align: left; }
         """
 
-        test_font_urls = [
-            "https://fonts.googleapis.com/css2?family=Montserrat&display=swap"
-        ]
+        prov = HTML(upload=False, css=test_css, font_urls=[])
+        prov.informer._cached_title = "Test Article"
+        prov.informer._cached_article = "<p>{}</p>".format(
+            "Lorem ipsum dolor sit amet. " * 200
+        )
 
-        url = "https://hbr.org/2019/11/getting-your-team-to-do-more-than-meet-deadlines"
-        prov = HTML(upload=False, css=test_css, font_urls=test_font_urls)
-        filename = prov.run(url)
+        filename = "test_custom_css.pdf"
+        prov.retrieve_pdf("https://example.com/article", filename)
         with pdfplumber.open(filename) as pdf:
-            self.assertIn(len(pdf.pages), [7, 8])
+            # 702px by 936px at 96 css px per inch is 526.5pt by 702pt
+            self.assertAlmostEqual(float(pdf.pages[0].width), 526.5, places=1)
+            self.assertAlmostEqual(float(pdf.pages[0].height), 702.0, places=1)
+            self.assertGreaterEqual(len(pdf.pages), 1)
 
         os.unlink(filename)
 

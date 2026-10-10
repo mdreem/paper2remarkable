@@ -8,6 +8,7 @@ import unittest
 from paper2remarkable.exceptions import NoPDFToolError
 from paper2remarkable.utils import chdir
 from paper2remarkable.utils import check_pdftool
+from paper2remarkable.utils import strip_default_port
 
 
 class TestUtils(unittest.TestCase):
@@ -36,6 +37,42 @@ class TestUtils(unittest.TestCase):
                 raise ValueError
         self.assertEqual(pwd, tmpdir1)
         self.assertEqual(start_dir, os.getcwd())
+
+    def test_strip_default_port(self):
+        # default ports are dropped
+        self.assertEqual(
+            strip_default_port("https://example.com:443/a/b"),
+            "https://example.com/a/b",
+        )
+        self.assertEqual(
+            strip_default_port("http://example.com:80/a/b"),
+            "http://example.com/a/b",
+        )
+        # non-default ports, and ports on the other scheme, are kept
+        for url in [
+            "https://example.com:8443/a/b",
+            "http://example.com:8080/a/b",
+            "https://example.com:80/a/b",
+            "http://example.com:443/a/b",
+        ]:
+            self.assertEqual(strip_default_port(url), url)
+        # urls without a port are untouched, including query and fragment
+        for url in [
+            "https://example.com/a/b",
+            "https://example.com/a?x=1&y=2#frag",
+            "https://example.com",
+        ]:
+            self.assertEqual(strip_default_port(url), url)
+        # credentials survive the rewrite
+        self.assertEqual(
+            strip_default_port("https://user:pw@example.com:443/a"),
+            "https://user:pw@example.com/a",
+        )
+        # a malformed port is left alone rather than raising
+        self.assertEqual(
+            strip_default_port("https://example.com:qq/a"),
+            "https://example.com:qq/a",
+        )
 
 
 if __name__ == "__main__":
