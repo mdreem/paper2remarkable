@@ -101,6 +101,27 @@ else:
     url_fetcher = P2RURLFetcher()
 
 
+FIGCAPTION_REGEX = re.compile(r"<figcaption\b.*?</figcaption>", re.S | re.I)
+ANCHOR_REGEX = re.compile(r"<a\b[^>]*>(.*?)</a>", re.S | re.I)
+
+
+def unlink_figcaptions(request_html):
+    """Replace anchors inside figcaptions with their text
+
+    Readability drops a container whose text is mostly link text. Sites that
+    caption a figure with nothing but a credit link (Substack's "(source)",
+    where only "source" is the anchor, giving a link density of 0.75) lose the
+    whole figure that way, while the same figure with a descriptive caption is
+    kept. The anchor is worth less than the image in a PDF, so we keep the
+    caption text and drop the link before the article is extracted.
+    """
+
+    def strip_anchors(match):
+        return ANCHOR_REGEX.sub(lambda a: a.group(1), match.group(0))
+
+    return FIGCAPTION_REGEX.sub(strip_anchors, request_html)
+
+
 def make_readable(request_html):
     """Use an extraction method to get the main article html
 
@@ -108,6 +129,8 @@ def make_readable(request_html):
     that generally yields better results. If that is not available, it falls
     back on readability.
     """
+
+    request_html = unlink_figcaptions(request_html)
 
     have_readabilipy_js = False
     try:

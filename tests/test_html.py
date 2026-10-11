@@ -14,6 +14,7 @@ import pdfplumber
 
 from paper2remarkable.providers.html import HTML
 from paper2remarkable.providers.html import make_readable
+from paper2remarkable.providers.html import unlink_figcaptions
 from paper2remarkable.utils import get_page_with_retry
 
 
@@ -63,6 +64,39 @@ class TestHTML(unittest.TestCase):
             self.assertGreaterEqual(len(pdf.pages), 1)
 
         os.unlink(filename)
+
+    def test_unlink_figcaptions(self):
+        """A figure captioned with only a credit link should survive extraction
+
+        Readability removes a container whose text is mostly link text, which
+        costs us the image. Stripping the anchor keeps the caption text and
+        drops the link density to zero.
+        """
+        figure = """
+        <figure>
+            <img src="https://example.com/plot.png"/>
+            <figcaption>(<a href="https://example.com/paper">source</a>)</figcaption>
+        </figure>
+        """
+
+        out = unlink_figcaptions(figure)
+        self.assertNotIn("<a ", out)
+        self.assertIn("(source)", out)
+        self.assertIn('<img src="https://example.com/plot.png"/>', out)
+
+    def test_unlink_figcaptions_leaves_body_links(self):
+        """Only anchors inside a figcaption are touched"""
+        html = """
+        <p>See <a href="https://example.com/a">this</a>.</p>
+        <figure>
+            <figcaption>From <a href="https://example.com/b">a paper</a></figcaption>
+        </figure>
+        """
+
+        out = unlink_figcaptions(html)
+        self.assertIn('<a href="https://example.com/a">this</a>', out)
+        self.assertNotIn('href="https://example.com/b"', out)
+        self.assertIn("From a paper", out)
 
     def test_table_rendering(self):
         """Test that HTML tables are properly rendered in the PDF output."""
